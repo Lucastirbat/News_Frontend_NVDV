@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export async function generateNewsStory(url: string): Promise<{ content: string; category: string; sources: { title: string; uri: string }[]; overallConfidence: number; error?: string }> {
   try {
-    const response = await axios.post('https://news-generator-nine.vercel.app/api/generate-news', { url });
+    const response = await axios.post('https://newsgenerator-nine.vercel.app/api/generate-news', { url });
     return response.data;
   } catch (error) {
     console.error('Error generating news story:', error);
@@ -12,7 +12,7 @@ export async function generateNewsStory(url: string): Promise<{ content: string;
 
 export async function generateRadioIntro(titles: string): Promise<{ content: string; error?: string }> {
   try {
-    const response = await axios.post('https://news-generator-nine.vercel.app/api/generate-intro', { titles });
+    const response = await axios.post('https://newsgenerator-nine.vercel.app/api/generate-intro', { titles });
     return response.data;
   } catch (error) {
     console.error('Error generating radio intro:', error);
