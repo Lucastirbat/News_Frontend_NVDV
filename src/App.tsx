@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import AudioPlayback from './AudioPlayback';
 import './App.css';
 import { generateNewsStory, generateRadioIntro } from './services/gemini';
+import axios from 'axios';
 
 interface Story {
   id: number;
@@ -9,6 +12,7 @@ interface Story {
   sources?: { title: string; uri: string }[];
   overallConfidence?: number;
   url?: string;
+  audioUrl?: string;
 }
 
 function App() {
@@ -23,6 +27,7 @@ function App() {
   const [storyLength, setStoryLength] = useState<number>(300); // Default length
   const [tone, setTone] = useState<string>('neutral'); // Default tone
   const [language, setLanguage] = useState<string>('Romanian'); // Default language
+  const [audioStories, setAudioStories] = useState<Story[]>([]);
 
   const handleGenerate = async () => {
     if (!urls.trim()) return;
@@ -79,7 +84,7 @@ function App() {
     if (!url) return;
     setLoadingId(id);
     try {
-      const result = await generateNewsStory(url);
+      const result = await generateNewsStory(url, storyLength, tone, language);
       setStories(stories.map(story => 
         story.id === id ? { ...story, content: result.content, sources: result.sources, overallConfidence: result.overallConfidence, error: result.error } : story
       ));
@@ -96,7 +101,7 @@ function App() {
 
     setLoadingId(id);
     try {
-      const result = await generateNewsStory(story.content); // Call the API with the current content
+      const result = await generateNewsStory(story.content, storyLength, tone, language); // Call the API with the current content
       setStories(stories.map(s => 
         s.id === id ? { ...s, content: result.content, sources: result.sources, overallConfidence: result.overallConfidence, error: result.error } : s
       ));
@@ -125,12 +130,35 @@ function App() {
     setStories([...stories, newStory]);
   };
 
+  const handleGenerateAudio = async (text: string, id: number) => {
+    try {
+      const response = await axios.post('https://newsgenerator-nine.vercel.app/api/generate-audio', {
+        text,
+      }, { responseType: 'blob' });
+
+      const audioUrl = URL.createObjectURL(response.data);
+
+      setAudioStories((prevStories) => 
+        prevStories.map((story) => 
+          story.id === id ? { ...story, audioUrl } : story
+        )
+      );
+    } catch (error) {
+      console.error('Error generating audio:', error);
+    }
+  };
+
   const handleApprove = async () => {
     try {
-      // TODO: Add API call to approve content
-      console.log('Approving content');
+      const newAudioStories = await Promise.all(
+        stories.map(async (story) => {
+          await handleGenerateAudio(story.content, story.id);
+          return story; // Return the story object
+        })
+      );
+      setAudioStories(newAudioStories);
     } catch (error) {
-      console.error('Error approving content:', error);
+      console.error('Error generating audio:', error);
     }
   };
 
@@ -143,139 +171,162 @@ function App() {
     setSettingsVisible(!settingsVisible);
   };
 
+  const handleRegenerateAudio = async (id: number) => {
+    const story = audioStories.find(s => s.id === id);
+    if (story) {
+      await handleGenerateAudio(story.content, id);
+    }
+  };
+
   return (
-    <div className="App">
-      <div className="container">
-        <h1>Tonomatul de știri</h1>
-        <p>Folosește asta pentru a genera știri noi</p>
+    <Router>
+      <div className="App">
+        <div className="container">
+          <h1>Tonomatul de știri</h1>
+          <p>Folosește asta pentru a genera știri noi</p>
 
-        <button onClick={toggleSettings}>
-          {settingsVisible ? 'Hide Settings' : 'Show Settings'}
-        </button>
-
-        {settingsVisible && (
-          <div className="settings">
-            <h2>Settings</h2>
-            <label>
-              Length of News Story:
-              <input
-                type="number"
-                value={storyLength}
-                onChange={(e) => setStoryLength(Number(e.target.value))}
-              />
-            </label>
-            <label>
-              Tone of Voice:
-              <select value={tone} onChange={(e) => setTone(e.target.value)}>
-                <option value="neutral">Neutral</option>
-                <option value="formal">Formal</option>
-                <option value="casual">Casual</option>
-              </select>
-            </label>
-            <label>
-              Language:
-              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-                <option value="Romanian">Romanian</option>
-                <option value="English">English</option>
-                {/* Add more languages as needed */}
-              </select>
-            </label>
-          </div>
-        )}
-
-        <div className="input-section">
-          <h2>Adauga aici link-urile de la știrile pe care le-ai găsit</h2>
-          <textarea
-            placeholder="Separa link-urile folosind virgula intre ele..."
-            value={urls}
-            onChange={(e) => setUrls(e.target.value)}
-            rows={3}
-          />
-          <button 
-            className="primary" 
-            onClick={handleGenerate}
-            disabled={isGenerating}
-          >
-            {isGenerating ? 'Se generează...' : 'Trimite pentru generare'}
+          <button onClick={toggleSettings}>
+            {settingsVisible ? 'Hide Settings' : 'Show Settings'}
           </button>
-        </div>
 
-        <div className="stories-section">
-          <h2>Știrile, rescrise</h2>
-          <p>Click pe știre pentru a o edita.</p>
-          
-          {stories.map((story) => (
-            <div key={story.id} className="story-container">
-              <h3>Știre {story.id}</h3>
-              <textarea
-                value={story.content}
-                onChange={(e) => {
-                  handleStoryChange(story.id, e.target.value);
-                  adjustTextAreaHeight(e);
-                }}
-                rows={1}
-              />
-              {story.error && <p>Error: {story.error}</p>}
-              {story.sources && story.sources.length > 0 && (
-                <div>
-                  <h4>Sources:</h4>
-                  <ul>
-                    {story.sources.map((source, index) => (
-                      <li key={index}>
-                        <a href={source.uri} target="_blank" rel="noopener noreferrer">
-                          {source.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {story.overallConfidence !== undefined && (
-                <p>Overall Confidence Score: {story.overallConfidence.toFixed(2)}</p>
-              )}
-              <button 
-                className="secondary" 
-                onClick={() => story.url ? handleRegenerate(story.url || '', story.id) : handleTextRegenerate(story.id)}
-                disabled={loadingId === story.id}
-              >
-                {loadingId === story.id ? 'Generare...' : 'Regenerare'}
-              </button>
+          {settingsVisible && (
+            <div className="settings">
+              <h2>Settings</h2>
+              <label>
+                Length of News Story:
+                <input
+                  type="number"
+                  value={storyLength}
+                  onChange={(e) => setStoryLength(Number(e.target.value))}
+                />
+              </label>
+              <label>
+                Tone of Voice:
+                <input
+                  type="text"
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value)}
+                  placeholder="Enter tone of voice"
+                />
+              </label>
+              <label>
+                Language:
+                <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+                  <option value="Romanian">Romanian</option>
+                  <option value="English">English</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="German">German</option>
+                  <option value="Italian">Italian</option>
+                  <option value="Portuguese">Portuguese</option>
+                  <option value="Ukrainian">Ukrainian</option>
+                  <option value="Turkish">Turkish</option>
+                  {/* Add more languages as needed */}
+                </select>
+              </label>
             </div>
-          ))}
+          )}
 
-          <button 
-            className="primary" 
-            onClick={handleAddTextStory}
-          >
-            Adaugă știre text
-          </button>
-
-          <div className="day-title">
-            <h3>Titlurile zilei</h3>
+          <div className="input-section">
+            <h2>Adauga aici link-urile de la știrile pe care le-ai găsit</h2>
             <textarea
-              value={dayTitles}
-              onChange={(e) => setDayTitles(e.target.value)}
+              placeholder="Separa link-urile folosind virgula intre ele..."
+              value={urls}
+              onChange={(e) => setUrls(e.target.value)}
+              rows={3}
             />
             <button 
-              className="primary"
-              onClick={handleGenerateRadioIntro}
+              className="primary" 
+              onClick={handleGenerate}
               disabled={isGenerating}
             >
-              {isGenerating ? 'Se generează...' : 'Generare Intro Radio'}
+              {isGenerating ? 'Se generează...' : 'Trimite pentru generare'}
             </button>
           </div>
 
-          <div className="button-group">
+          <div className="stories-section">
+            <h2>Știrile, rescrise</h2>
+            <p>Click pe știre pentru a o edita.</p>
+            
+            {stories.map((story) => (
+              <div key={story.id} className="story-container">
+                <h3>Știre {story.id}</h3>
+                <textarea
+                  value={story.content}
+                  onChange={(e) => {
+                    handleStoryChange(story.id, e.target.value);
+                    adjustTextAreaHeight(e);
+                  }}
+                  rows={1}
+                />
+                {story.error && <p>Error: {story.error}</p>}
+                {story.sources && story.sources.length > 0 && (
+                  <div>
+                    <h4>Sources:</h4>
+                    <ul>
+                      {story.sources.map((source, index) => (
+                        <li key={index}>
+                          <a href={source.uri} target="_blank" rel="noopener noreferrer">
+                            {source.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {story.overallConfidence !== undefined && (
+                  <p>Overall Confidence Score: {story.overallConfidence.toFixed(2)}</p>
+                )}
+                <button 
+                  className="secondary" 
+                  onClick={() => story.url ? handleRegenerate(story.url || '', story.id) : handleTextRegenerate(story.id)}
+                  disabled={loadingId === story.id}
+                >
+                  {loadingId === story.id ? 'Generare...' : 'Regenerare'}
+                </button>
+              </div>
+            ))}
+
             <button 
-              className="approve" 
-              onClick={handleApprove}
+              className="primary" 
+              onClick={handleAddTextStory}
             >
-              Aprobă conținutul
+              Adaugă știre text
             </button>
+
+            <div className="day-title">
+              <h3>Titlurile zilei</h3>
+              <textarea
+                value={dayTitles}
+                onChange={(e) => setDayTitles(e.target.value)}
+              />
+              <button 
+                className="primary"
+                onClick={handleGenerateRadioIntro}
+                disabled={isGenerating}
+              >
+                {isGenerating ? 'Se generează...' : 'Generare Intro Radio'}
+              </button>
+            </div>
+
+            <div className="button-group">
+              <button 
+                className="approve" 
+                onClick={handleApprove}
+              >
+                Aprobă conținutul
+              </button>
+            </div>
           </div>
+
+          <Link to="/audio-playback">Go to Audio Playback</Link>
         </div>
+
+        <Routes>
+          <Route path="/audio-playback" element={<AudioPlayback stories={audioStories} onRegenerate={handleRegenerateAudio} />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 
