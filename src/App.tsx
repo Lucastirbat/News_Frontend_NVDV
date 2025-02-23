@@ -17,6 +17,12 @@ function App() {
   const [dayTitles, setDayTitles] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  
+  // Settings state
+  const [settingsVisible, setSettingsVisible] = useState<boolean>(false);
+  const [storyLength, setStoryLength] = useState<number>(300); // Default length
+  const [tone, setTone] = useState<string>('neutral'); // Default tone
+  const [language, setLanguage] = useState<string>('Romanian'); // Default language
 
   const handleGenerate = async () => {
     if (!urls.trim()) return;
@@ -26,7 +32,7 @@ function App() {
       const newStories = await Promise.all(
         urlList.map(async (url, index) => {
           try {
-            const result = await generateNewsStory(url);
+            const result = await generateNewsStory(url, storyLength, tone, language);
             return {
               id: index + 1,
               content: result.content,
@@ -133,11 +139,49 @@ function App() {
     event.target.style.height = `${event.target.scrollHeight}px`; // Set to scroll height
   };
 
+  const toggleSettings = () => {
+    setSettingsVisible(!settingsVisible);
+  };
+
   return (
     <div className="App">
       <div className="container">
         <h1>Tonomatul de știri</h1>
         <p>Folosește asta pentru a genera știri noi</p>
+
+        <button onClick={toggleSettings}>
+          {settingsVisible ? 'Hide Settings' : 'Show Settings'}
+        </button>
+
+        {settingsVisible && (
+          <div className="settings">
+            <h2>Settings</h2>
+            <label>
+              Length of News Story:
+              <input
+                type="number"
+                value={storyLength}
+                onChange={(e) => setStoryLength(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Tone of Voice:
+              <select value={tone} onChange={(e) => setTone(e.target.value)}>
+                <option value="neutral">Neutral</option>
+                <option value="formal">Formal</option>
+                <option value="casual">Casual</option>
+              </select>
+            </label>
+            <label>
+              Language:
+              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+                <option value="Romanian">Romanian</option>
+                <option value="English">English</option>
+                {/* Add more languages as needed */}
+              </select>
+            </label>
+          </div>
+        )}
 
         <div className="input-section">
           <h2>Adauga aici link-urile de la știrile pe care le-ai găsit</h2>

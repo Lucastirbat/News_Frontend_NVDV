@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-export async function generateNewsStory(url: string): Promise<{ content: string; category: string; sources: { title: string; uri: string }[]; overallConfidence: number; error?: string }> {
+export async function generateNewsStory(url: string, length: number, tone: string, language: string): Promise<{ content: string; category: string; sources: { title: string; uri: string }[]; overallConfidence: number; error?: string }> {
   try {
-    const response = await axios.post('https://newsgenerator-nine.vercel.app/api/generate-news', { url });
+    const response = await axios.post('https://newsgenerator-nine.vercel.app/api/generate-news', { url, length, tone, language });
     return response.data;
   } catch (error) {
     console.error('Error generating news story:', error);
